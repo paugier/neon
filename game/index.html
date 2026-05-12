@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NÉON — brick breaker</title>
+    <style>
+      /* Minimal shell. The GAME colors live in theme.js; here we only style
+         the page that hosts the canvas. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0a0118;
+        color: #f5f5ff;
+        font-family: monospace;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+      }
+      h1 {
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        color: #ff2d95;
+        margin: 0;
+      }
+      canvas {
+        border: 1px solid #00e5ff;
+        box-shadow: 0 0 24px #00e5ff55;
+      }
+      p {
+        opacity: 0.7;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>NÉON</h1>
+    <canvas id="game"></canvas>
+    <p>Move the paddle with the mouse.</p>
+
+    <script type="module">
+      import { boot } from './neon.js';
+      boot();
+    </script>
+  </body>
+</html>

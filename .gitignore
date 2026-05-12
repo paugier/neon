@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# NB: the `.env` file is INTENTIONALLY tracked in this training repo (it serves
+# as the trap for the security module). In a real project, uncomment:
+# .env
