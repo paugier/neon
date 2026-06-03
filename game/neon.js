@@ -23,9 +23,12 @@ export const BRICK_H = 20;
 export const BRICK_GAP = 8;
 export const BRICK_TOP = 48;
 
+const STORAGE_KEY = 'neon.best';
+
 // --- State construction ----------------------------------------------------
 
 // Builds the brick grid for a given level.
+// The higher the level, the more points bricks are worth.
 export function makeBricks(level = 1) {
   const bricks = [];
   const offsetX = (WIDTH - (BRICK_COLS * (BRICK_W + BRICK_GAP) - BRICK_GAP)) / 2;
@@ -38,6 +41,7 @@ export function makeBricks(level = 1) {
         h: BRICK_H,
         row,
         alive: true,
+        points: (BRICK_ROWS - row) * 10 * level,
       });
     }
   }
@@ -55,6 +59,9 @@ export function createState(level = 1) {
   return {
     level,
     lives: 3,
+    score: 0,
+    combo: 0,
+    best: 0,
     running: false,
     paddle: { x: (WIDTH - PADDLE_W) / 2, y: PADDLE_Y, w: PADDLE_W, h: PADDLE_H },
     ball: { x: WIDTH / 2, y: PADDLE_Y - BALL_R - 2, r: BALL_R, vx: speed * 0.5, vy: -speed },
@@ -72,6 +79,46 @@ export function collides(ball, brick) {
     ball.y + ball.r > brick.y &&
     ball.y - ball.r < brick.y + brick.h
   );
+}
+
+// --- Score & combo ---------------------------------------------------------
+
+// Combo multiplier (unbounded for now).
+export function comboMultiplier(combo) {
+  return 1 + combo * 0.5;
+}
+
+// Points earned for breaking a brick, combo included.
+export function scoreForBrick(brick, combo) {
+  return Math.round(brick.points * comboMultiplier(combo));
+}
+
+// --- Best score persistence ------------------------------------------------
+
+// Reads the best score; robust to corrupted or missing storage (=> 0).
+export function loadBest(storage) {
+  if (!storage) return 0;
+  try {
+    const raw = storage.getItem(STORAGE_KEY);
+    const value = Number.parseInt(raw, 10);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Writes the best score if the current score beats it. Returns the updated best.
+export function saveBest(storage, score) {
+  const best = loadBest(storage);
+  if (score > best && storage) {
+    try {
+      storage.setItem(STORAGE_KEY, String(score));
+    } catch {
+      // storage unavailable (private mode, quota): silently ignore
+    }
+    return score;
+  }
+  return best;
 }
 
 // --- Physics (movement + wall/paddle bounces) ------------------------------
@@ -108,6 +155,7 @@ export function step(state, dt) {
     ball.vy = -Math.abs(ball.vy);
     const hit = (ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2);
     ball.vx = ballSpeed(state.level) * 0.6 * hit;
+    state.combo = 0; // touching the paddle resets the combo
   }
 
   if (ball.y - ball.r > HEIGHT) {
@@ -129,6 +177,8 @@ function frame(ctx, state) {
 
     if (collides(state.ball, brick)) {
       brick.alive = false;
+      state.combo += 1;
+      state.score += scoreForBrick(brick, state.combo);
       // TODO: bounce the ball off the brick (only walls/paddle bounce for now).
     }
 
@@ -143,6 +193,12 @@ function frame(ctx, state) {
   ctx.beginPath();
   ctx.arc(state.ball.x, state.ball.y, state.ball.r, 0, Math.PI * 2);
   ctx.fill();
+
+  ctx.fillStyle = '#f5f5ff';
+  ctx.font = '16px monospace';
+  ctx.fillText(`Score ${state.score}`, 12, 24);
+  ctx.fillText(`Best ${state.best}`, WIDTH - 110, 24);
+  ctx.fillText(`Lives ${state.lives}`, WIDTH / 2 - 30, 24);
 }
 
 // --- Boot ------------------------------------------------------------------
@@ -154,6 +210,7 @@ export function boot(doc = document) {
   canvas.height = HEIGHT;
 
   const state = createState(1);
+  state.best = loadBest(globalThis.localStorage);
   state.running = true;
 
   canvas.addEventListener('mousemove', (e) => {
@@ -171,8 +228,11 @@ export function boot(doc = document) {
       const lost = step(state, dt);
       if (lost) {
         state.lives -= 1;
+        state.combo = 0;
         if (state.lives <= 0) {
+          state.best = saveBest(globalThis.localStorage, state.score);
           Object.assign(state, createState(state.level));
+          state.best = loadBest(globalThis.localStorage);
         } else {
           state.ball = createState(state.level).ball;
         }
