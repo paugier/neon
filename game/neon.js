@@ -1,9 +1,14 @@
 // neon.js — NÉON, a minimalist brick breaker (zero dependencies).
 //
-// Brick collision detection lives inside the draw loop `frame()`: logic and
-// rendering are mixed. We accept that for now.
+// This file INTENTIONALLY mixes game logic and rendering in a few places
+// (see ISSUES.md #2): brick collision detection currently lives inside the
+// draw loop `frame()`. This is deliberate debt, ripe for a refactor.
 //
-// The module runs nothing on import: only `boot()` touches the DOM.
+// The module runs nothing on import: only `boot()` touches the DOM. Pure
+// logic can therefore be imported from the tests (`node --test`) without a
+// browser.
+
+import { palette, brickColor } from './theme.js';
 
 // --- Field constants -------------------------------------------------------
 
@@ -48,7 +53,7 @@ export function makeBricks(level = 1) {
   return bricks;
 }
 
-// Ball speed as a function of the level.
+// Ball speed as a function of the level (ramps up with each level).
 export function ballSpeed(level = 1) {
   return 260 + (level - 1) * 90;
 }
@@ -69,9 +74,12 @@ export function createState(level = 1) {
   };
 }
 
-// --- Collision -------------------------------------------------------------
+// --- Collision (tested primitive) ------------------------------------------
 
-// True if the ball overlaps the brick (AABB test on the current position).
+// True if the ball (circle approximated by its box) overlaps the brick.
+// Simple AABB test: it only says WHETHER the ball and the brick overlap, not
+// WHICH face was hit. The missing bounce in frame() is what lets the ball plow
+// straight through bricks (see #1).
 export function collides(ball, brick) {
   return (
     ball.x + ball.r > brick.x &&
@@ -81,9 +89,10 @@ export function collides(ball, brick) {
   );
 }
 
-// --- Score & combo ---------------------------------------------------------
+// --- Score & combo (NOT covered by tests — debt #5) ------------------------
 
-// Combo multiplier (unbounded for now).
+// Combo multiplier. UNBOUNDED today: a long combo makes the score blow up
+// uncontrollably (see #5, expected improvement = clamp it).
 export function comboMultiplier(combo) {
   return 1 + combo * 0.5;
 }
@@ -95,7 +104,8 @@ export function scoreForBrick(brick, combo) {
 
 // --- Best score persistence ------------------------------------------------
 
-// Reads the best score; robust to corrupted or missing storage (=> 0).
+// Reads the best score from a localStorage-compatible storage.
+// Robust to corrupted or missing storage: returns 0 instead of throwing.
 export function loadBest(storage) {
   if (!storage) return 0;
   try {
@@ -123,7 +133,9 @@ export function saveBest(storage, score) {
 
 // --- Physics (movement + wall/paddle bounces) ------------------------------
 
-// Advances the ball by a step `dt` and handles walls + paddle (not bricks).
+// Advances the ball by a time step `dt` (in seconds) and handles bounces off
+// the walls and the paddle. Does NOT handle bricks: that responsibility still
+// lives in the render loop `frame()` (debt #2).
 // Returns `true` if the ball is lost (exits through the bottom).
 export function step(state, dt) {
   const { ball, paddle } = state;
@@ -131,6 +143,7 @@ export function step(state, dt) {
   ball.x += ball.vx * dt;
   ball.y += ball.vy * dt;
 
+  // Side walls
   if (ball.x - ball.r < 0) {
     ball.x = ball.r;
     ball.vx = Math.abs(ball.vx);
@@ -139,11 +152,13 @@ export function step(state, dt) {
     ball.vx = -Math.abs(ball.vx);
   }
 
+  // Ceiling
   if (ball.y - ball.r < 0) {
     ball.y = ball.r;
     ball.vy = Math.abs(ball.vy);
   }
 
+  // Paddle
   if (
     ball.vy > 0 &&
     ball.y + ball.r >= paddle.y &&
@@ -153,25 +168,29 @@ export function step(state, dt) {
   ) {
     ball.y = paddle.y - ball.r;
     ball.vy = -Math.abs(ball.vy);
+    // The rebound angle depends on where the paddle was hit.
     const hit = (ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2);
     ball.vx = ballSpeed(state.level) * 0.6 * hit;
     state.combo = 0; // touching the paddle resets the combo
   }
 
+  // Exit through the bottom: ball lost
   if (ball.y - ball.r > HEIGHT) {
     return true;
   }
   return false;
 }
 
-// --- Rendering (DOM): brick collision STILL mixed in here ------------------
+// --- Rendering (DOM): brick collision logic STILL mixed in here ------------
 
-const BRICK_COLORS = ['#ff2d95', '#ff8a00', '#ffe600', '#39ff14', '#00e5ff'];
-
+// Main render loop. For each live brick we test collision AND draw in the same
+// pass: this is where logic and rendering are entangled.
 function frame(ctx, state) {
-  ctx.fillStyle = '#0a0118';
+  // Background
+  ctx.fillStyle = palette.background;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
+  // Bricks: collision + bounce + score + drawing, all in one place.
   for (const brick of state.bricks) {
     if (!brick.alive) continue;
 
@@ -179,30 +198,39 @@ function frame(ctx, state) {
       brick.alive = false;
       state.combo += 1;
       state.score += scoreForBrick(brick, state.combo);
-      // TODO: bounce the ball off the brick (only walls/paddle bounce for now).
+      // BUG (#1): the ball is NOT deflected here. Only the walls and the paddle
+      // bounce (in step()); bricks were never given a bounce. So the ball plows
+      // straight through a column head-on AND straight through the side of a
+      // row. Fix = a real per-face bounce (flip vy on a top/bottom hit, vx on a
+      // side hit) plus pushing the ball back out of the brick.
     }
 
-    ctx.fillStyle = BRICK_COLORS[brick.row % BRICK_COLORS.length];
+    ctx.fillStyle = brickColor(brick.row);
     ctx.fillRect(brick.x, brick.y, brick.w, brick.h);
   }
 
+  // Paddle — color hard-coded instead of using the palette (inconsistency #6).
   ctx.fillStyle = '#00e5ff';
   ctx.fillRect(state.paddle.x, state.paddle.y, state.paddle.w, state.paddle.h);
 
+  // Ball — also hard-coded (#6).
   ctx.fillStyle = '#39ff14';
   ctx.beginPath();
   ctx.arc(state.ball.x, state.ball.y, state.ball.r, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = '#f5f5ff';
+  // HUD
+  ctx.fillStyle = palette.text;
   ctx.font = '16px monospace';
   ctx.fillText(`Score ${state.score}`, 12, 24);
   ctx.fillText(`Best ${state.best}`, WIDTH - 110, 24);
   ctx.fillText(`Lives ${state.lives}`, WIDTH / 2 - 30, 24);
 }
 
-// --- Boot ------------------------------------------------------------------
+// --- Boot (browser entry point) --------------------------------------------
 
+// Starts the game: wires up the canvas, the mouse and the animation loop.
+// The only function that depends on the DOM; never called on import.
 export function boot(doc = document) {
   const canvas = doc.getElementById('game');
   const ctx = canvas.getContext('2d');
@@ -210,9 +238,10 @@ export function boot(doc = document) {
   canvas.height = HEIGHT;
 
   const state = createState(1);
-  state.best = loadBest(globalThis.localStorage);
+  state.best = loadBest(doc.defaultView?.localStorage ?? globalThis.localStorage);
   state.running = true;
 
+  // Move the paddle with the mouse.
   canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left - state.paddle.w / 2;
@@ -234,9 +263,12 @@ export function boot(doc = document) {
           Object.assign(state, createState(state.level));
           state.best = loadBest(globalThis.localStorage);
         } else {
+          // relaunch the ball
           state.ball = createState(state.level).ball;
         }
       }
+
+      // Level cleared: all bricks broken
       if (state.bricks.every((b) => !b.alive)) {
         state.level += 1;
         state.bricks = makeBricks(state.level);
