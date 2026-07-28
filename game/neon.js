@@ -9,6 +9,7 @@
 // browser.
 
 import { palette, brickColor } from './theme.js';
+import { createGlowMap, drawGlow, GLOW_W, GLOW_H } from './bloom.js';
 
 // --- Field constants -------------------------------------------------------
 
@@ -241,6 +242,15 @@ export function boot(doc = document) {
   state.best = loadBest(doc.defaultView?.localStorage ?? globalThis.localStorage);
   state.running = true;
 
+  // Glow pass: a coarse offscreen light map, stretched over the field.
+  const offscreen = doc.createElement('canvas');
+  offscreen.width = GLOW_W;
+  offscreen.height = GLOW_H;
+  const glow = {
+    map: createGlowMap(),
+    image: offscreen.getContext('2d').createImageData(GLOW_W, GLOW_H),
+  };
+
   // Move the paddle with the mouse.
   canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -277,6 +287,7 @@ export function boot(doc = document) {
     }
 
     frame(ctx, state);
+    drawGlow(ctx, glow, state, WIDTH, HEIGHT, offscreen);
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);

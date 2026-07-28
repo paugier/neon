@@ -34,6 +34,7 @@ npm test
 - `game/index.html` — the shell: page + `<canvas>` + boot.
 - `game/neon.js` — the game logic **and** the rendering.
 - `game/theme.js` — the color palette.
+- `game/bloom.js` — the glow pass that gives the game its neon look.
 - `game/neon.test.js` — the tests.
 
 The backlog of known tasks is in `ISSUES.md`. The project conventions (including
