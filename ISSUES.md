@@ -16,27 +16,29 @@ bug to fix, debt to pay down, or a feature to add.
 
 ## #1 — bug: the ball plows through bricks instead of bouncing
 
-The ball is **never deflected by bricks**. Only the walls and the paddle bounce
-the ball (in `step()`); the brick bounce was never implemented (`frame()` in
-`game/neon.js` destroys the brick but does not change the ball's velocity). Two
-very visible symptoms:
+`frame()` (in `game/neon.js`) destroys the brick it hits but never touches the
+ball's velocity: only the walls and the paddle bounce (`step()`). The whole
+collision resolution has to be fixed, not just the visible symptom. `frame()` is
+also not exported, so none of this is testable today: export it (or extract the
+collision, cf. #2).
 
-- **head-on** (A): the ball punches straight through a whole column in a line,
-  without bouncing back;
-- **from the side** (B): the ball saws straight through the side of a row
-  instead of bouncing off it.
+- **per face**: the axis with the *smaller* penetration is the face that was hit -
+  flip `vy` on a top/bottom hit, `vx` on a side hit, and leave the other
+  component exactly as it was;
+- **corner**: equal penetrations means a diagonal hit - flip both components;
+- **push out**: reposition the ball outside the brick rectangle, otherwise it
+  still overlaps on the next frame and re-flips forever (sticky bounce);
+- **neighbours**: the grid gap is 8 px and the ball 14 px across, so every seam
+  overlaps two bricks in the *same* pass - the bounce must apply exactly once
+  (`vy = -vy` applied twice cancels out and the ball goes through);
+- **tunnelling**: detection is discrete (position before / after the move). At
+  level 6, `ballSpeed(6)` = 710 px/s and a stuttered frame is capped at 50 ms:
+  35.5 px per step against 34 px to cross (`BRICK_H` + diameter), so the ball
+  jumps over the brick without ever touching it. Sweep between the two positions.
 
-Detail:
-
-- **Reproduce**: start a game and send the ball into any group of bricks — it
-  goes straight through them. A near-horizontal shot (hit the paddle near its
-  edge) makes the side case obvious.
-- **Lead**: give bricks a real **per-face** bounce — compare the horizontal vs
-  vertical penetration to know which face was hit, flip the matching axis
-  (`vy` for top/bottom, `vx` for a side), and push the ball back out of the
-  brick.
-- **Expected**: edge cases added **first as red tests** (a top/bottom hit flips
-  `vy`; a side hit flips `vx`), then green.
+**Reproduce**: send the ball into a group of bricks; a near-horizontal shot (hit
+the paddle near its edge) makes the side case obvious. **Expected**: each case
+above added **first as a red test**, then green.
 
 ## #2 — perf/quality: collision entangled with rendering
 
