@@ -11,6 +11,30 @@
 import { palette, brickColor } from './theme.js';
 import { createGlowMap, drawGlow, GLOW_W, GLOW_H } from './bloom.js';
 
+// --- Axis convention -------------------------------------------------------
+
+// Screen coordinates, as the canvas defines them: the origin is the TOP-LEFT
+// corner and **Y GROWS DOWNWARD**. So `y = 0` is the ceiling, `y = HEIGHT` the
+// line through which the ball is lost, and a ball climbing toward the bricks
+// has a NEGATIVE `vy`. Every sign in this file follows from that single
+// choice — the launch velocity, each bounce, and the paddle test `vy > 0`.
+//
+// The constants below name the sign a velocity component takes per heading.
+// Assert against them rather than against a bare `-1` / `1`: a test reading
+// `Math.sign(ball.vy) === UP` states its intent, where a hard-coded `-1` only
+// states an arithmetic fact and quietly means the opposite if the convention
+// ever flips.
+//
+//   UP    (-1)  toward the ceiling and the bricks
+//   DOWN  (+1)  toward the paddle and the loss line
+//   LEFT  (-1)  toward x = 0
+//   RIGHT (+1)  toward x = WIDTH
+
+export const UP = -1;
+export const DOWN = 1;
+export const LEFT = -1;
+export const RIGHT = 1;
+
 // --- Field constants -------------------------------------------------------
 
 export const WIDTH = 640;
