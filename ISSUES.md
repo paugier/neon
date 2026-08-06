@@ -18,9 +18,7 @@ bug to fix, debt to pay down, or a feature to add.
 
 `frame()` (in `game/neon.js`) destroys the brick it hits but never touches the
 ball's velocity: only the walls and the paddle bounce (`step()`). The whole
-collision resolution has to be fixed, not just the visible symptom. `frame()` is
-also not exported, so none of this is testable today: export it (or extract the
-collision, cf. #2).
+collision resolution has to be fixed, not just the visible symptom.
 
 - **per face**: the axis with the *smaller* penetration is the face that was hit -
   flip `vy` on a top/bottom hit, `vx` on a side hit, and leave the other
