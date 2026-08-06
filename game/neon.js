@@ -186,7 +186,7 @@ export function step(state, dt) {
 
 // Main render loop. For each live brick we test collision AND draw in the same
 // pass: this is where logic and rendering are entangled.
-function frame(ctx, state) {
+export function frame(ctx, state) {
   // Background
   ctx.fillStyle = palette.background;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
